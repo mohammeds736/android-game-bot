@@ -1,8 +1,37 @@
 import os
 import logging
+import sys
+
+# إصلاح مشكلة imghdr في Python 3.13
+try:
+    import imghdr
+except ImportError:
+    # إنشاء بديل بسيط لـ imghdr
+    import struct
+    
+    def imghdr_what(file):
+        with open(file, 'rb') as f:
+            header = f.read(12)
+        if header.startswith(b'\x89PNG\r\n\x1a\n'):
+            return 'png'
+        elif header.startswith(b'\xff\xd8\xff'):
+            return 'jpeg'
+        elif header.startswith(b'GIF87a') or header.startswith(b'GIF89a'):
+            return 'gif'
+        elif header.startswith(b'BM'):
+            return 'bmp'
+        return None
+    
+    # إضافة الوظيفة إلى sys.modules
+    class ImghdrModule:
+        what = staticmethod(imghdr_what)
+    
+    sys.modules['imghdr'] = ImghdrModule()
+    import imghdr
+
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
-from flask import Flask, render_template_string
+from flask import Flask
 import threading
 
 # إعدادات التطبيق
@@ -11,7 +40,10 @@ BOT_TOKEN = os.environ.get('BOT_TOKEN', 'default_token')
 PORT = int(os.environ.get('PORT', 10000))
 
 # إعداد التسجيل
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
 # صفحة ويب أساسية
