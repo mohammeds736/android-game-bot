@@ -1,38 +1,9 @@
 import os
 import logging
-import sys
-
-# إصلاح مشكلة imghdr في Python 3.13
-try:
-    import imghdr
-except ImportError:
-    # إنشاء بديل بسيط لـ imghdr
-    import struct
-    
-    def imghdr_what(file):
-        with open(file, 'rb') as f:
-            header = f.read(12)
-        if header.startswith(b'\x89PNG\r\n\x1a\n'):
-            return 'png'
-        elif header.startswith(b'\xff\xd8\xff'):
-            return 'jpeg'
-        elif header.startswith(b'GIF87a') or header.startswith(b'GIF89a'):
-            return 'gif'
-        elif header.startswith(b'BM'):
-            return 'bmp'
-        return None
-    
-    # إضافة الوظيفة إلى sys.modules
-    class ImghdrModule:
-        what = staticmethod(imghdr_what)
-    
-    sys.modules['imghdr'] = ImghdrModule()
-    import imghdr
-
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from flask import Flask
-import threading
+import asyncio
 
 # إعدادات التطبيق
 app = Flask(__name__)
@@ -52,28 +23,31 @@ def home():
     return "🎮 بوت تحكم لعبة أندرويد يعمل بنجاح! استخدم Telegram للتحكم."
 
 # أوامر البوت
-def start(update: Update, context: CallbackContext):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from telegram import ReplyKeyboardMarkup
+    
     keyboard = [['⚔ هجوم', '🛡 دفاع'], ['🏃 حركة', '🎯 جمع']]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    update.message.reply_text('🎮 بوت التحكم في اللعبة جاهز!', reply_markup=reply_markup)
+    await update.message.reply_text('🎮 بوت التحكم في اللعبة جاهز!', reply_markup=reply_markup)
 
-def handle_message(update: Update, context: CallbackContext):
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     
     if text == '⚔ هجوم':
-        update.message.reply_text("✅ تم الهجوم!")
+        await update.message.reply_text("✅ تم الهجوم!")
     elif text == '🛡 دفاع':
-        update.message.reply_text("✅ تم الدفاع!")
+        await update.message.reply_text("✅ تم الدفاع!")
     elif text == '🏃 حركة':
-        update.message.reply_text("✅ تمت الحركة!")
+        await update.message.reply_text("✅ تمت الحركة!")
     elif text == '🎯 جمع':
-        update.message.reply_text("✅ تم الجمع!")
+        await update.message.reply_text("✅ تم الجمع!")
 
 def run_flask():
     app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)
 
-def main():
-    # تشغيل Flask في الخلفية
+async def main():
+    # تشغيل Flask في الخلفية باستخدام threading
+    import threading
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.daemon = True
     flask_thread.start()
@@ -84,18 +58,16 @@ def main():
         return
         
     try:
-        updater = Updater(BOT_TOKEN, use_context=True)
-        dp = updater.dispatcher
+        application = Application.builder().token(BOT_TOKEN).build()
         
-        dp.add_handler(CommandHandler("start", start))
-        dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
         
         logger.info("✅ البوت يعمل...")
-        updater.start_polling()
-        updater.idle()
+        await application.run_polling()
         
     except Exception as e:
         logger.error(f"❌ فشل تشغيل البوت: {e}")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
